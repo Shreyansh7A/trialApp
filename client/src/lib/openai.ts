@@ -50,14 +50,35 @@ export async function analyzeSentiment(text: string): Promise<SentimentAnalysisR
         confidence: Math.max(0, Math.min(1, result.confidence)),
       };
     } else {
-      // Client-side: Fallback to a default neutral sentiment
-      // Real applications would make an API call to the server here
-      console.warn("Running in browser environment. Using fallback sentiment analysis.");
-      return {
-        sentiment: 'neutral',
-        score: 50,
-        confidence: 0.5
-      };
+      // Client-side: Call the server API endpoint for sentiment analysis
+      try {
+        const response = await fetch('/api/sentiment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+        
+        const result = await response.json();
+        return {
+          sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
+          score: result.score,
+          confidence: result.confidence,
+        };
+      } catch (apiError) {
+        console.error("Error calling sentiment API:", apiError);
+        // Fallback to neutral sentiment if API call fails
+        return {
+          sentiment: 'neutral',
+          score: 50,
+          confidence: 0.5
+        };
+      }
     }
   } catch (error) {
     console.error("Failed to analyze sentiment:", error);

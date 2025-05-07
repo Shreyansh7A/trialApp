@@ -5,6 +5,7 @@ import * as reviewService from '../services/reviewService';
 import { storage } from '../storage';
 import { ZodError } from 'zod';
 import { fromZodError } from 'zod-validation-error';
+import { analyzeSentiment as openAiAnalyzeSentiment } from '@/lib/openai';
 
 // FastAPI backend URL
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
@@ -185,6 +186,46 @@ export const clearAppAnalysisHistory = async (_req: Request, res: Response) => {
     console.error('Error clearing analysis history:', error);
     return res.status(500).json({ 
       message: 'Failed to clear analysis history' 
+    });
+  }
+};
+
+// Direct sentiment analysis endpoint for client use
+export const analyzeSentiment = async (req: Request, res: Response) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ 
+        message: 'Text content is required for sentiment analysis' 
+      });
+    }
+    
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn('OPENAI_API_KEY is not set. Using fallback sentiment.');
+      return res.status(200).json({
+        sentiment: 'neutral',
+        score: 50,
+        confidence: 0.5
+      });
+    }
+    
+    try {
+      const result = await openAiAnalyzeSentiment(text);
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Error during OpenAI sentiment analysis:', error);
+      // Fallback to neutral sentiment on error
+      return res.status(200).json({
+        sentiment: 'neutral',
+        score: 50,
+        confidence: 0.5
+      });
+    }
+  } catch (error) {
+    console.error('Error in sentiment analysis endpoint:', error);
+    return res.status(500).json({ 
+      message: 'Failed to analyze sentiment' 
     });
   }
 };

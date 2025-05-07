@@ -9,6 +9,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reviews/history', reviewController.getAppAnalysisHistory);
   app.get('/api/reviews/:id', reviewController.getAppAnalysisById);
   app.delete('/api/reviews/history', reviewController.clearAppAnalysisHistory);
+  
+  // Direct sentiment analysis endpoint - for client use
+  app.post('/api/sentiment', reviewController.analyzeSentiment);
 
   const httpServer = createServer(app);
 
