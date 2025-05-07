@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-color: #4a5eef;
+  --background-color: #f5f7ff;
+}
+
+body {
+  color: #333;
+  background-color: var(--background-color);
+}
+
+@layer components {
+  .heading-text {
+    @apply text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-primary-800;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-all;
+  }
+  
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors; 
+  }
+}
