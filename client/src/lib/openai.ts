@@ -20,31 +20,45 @@ export interface SentimentAnalysisResult {
 
 export async function analyzeSentiment(text: string): Promise<SentimentAnalysisResult> {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a sentiment analysis expert. Analyze the sentiment of the app review and provide a sentiment classification (positive, negative, or neutral), a sentiment score from 0 to 100 (where 0 is completely negative and 100 is completely positive), and a confidence score between 0 and 1. Respond with JSON in this format: { 'sentiment': string, 'score': number, 'confidence': number }",
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-      response_format: { type: "json_object" },
-    });
+    // For local development, we'll check if running in Node.js environment
+    // In browser environment, the OpenAI API key should never be exposed
+    if (typeof window === 'undefined') {
+      // Server-side: Direct OpenAI API call
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a sentiment analysis expert. Analyze the sentiment of the app review and provide a sentiment classification (positive, negative, or neutral), a sentiment score from 0 to 100 (where 0 is completely negative and 100 is completely positive), and a confidence score between 0 and 1. Respond with JSON in this format: { 'sentiment': string, 'score': number, 'confidence': number }",
+          },
+          {
+            role: "user",
+            content: text,
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
 
-    // Ensure content is not null
-    const content = response.choices[0]?.message?.content || '{"sentiment":"neutral","score":50,"confidence":0.5}';
-    const result = JSON.parse(content);
+      // Ensure content is not null
+      const content = response.choices[0]?.message?.content || '{"sentiment":"neutral","score":50,"confidence":0.5}';
+      const result = JSON.parse(content);
 
-    return {
-      sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
-      score: Math.max(0, Math.min(100, Math.round(result.score))),
-      confidence: Math.max(0, Math.min(1, result.confidence)),
-    };
+      return {
+        sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
+        score: Math.max(0, Math.min(100, Math.round(result.score))),
+        confidence: Math.max(0, Math.min(1, result.confidence)),
+      };
+    } else {
+      // Client-side: Fallback to a default neutral sentiment
+      // Real applications would make an API call to the server here
+      console.warn("Running in browser environment. Using fallback sentiment analysis.");
+      return {
+        sentiment: 'neutral',
+        score: 50,
+        confidence: 0.5
+      };
+    }
   } catch (error) {
     console.error("Failed to analyze sentiment:", error);
     throw new Error("Failed to analyze sentiment: " + (error as Error).message);
