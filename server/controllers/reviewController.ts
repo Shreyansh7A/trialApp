@@ -1,13 +1,17 @@
 import { Request, Response } from 'express';
 import { format } from 'date-fns';
+import axios from 'axios';
 import * as reviewService from '../services/reviewService';
 import { storage } from '../storage';
 import { ZodError } from 'zod';
 import { fromZodError } from 'zod-validation-error';
 
+// FastAPI backend URL
+const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
+
 export const analyzeAppReviews = async (req: Request, res: Response) => {
   try {
-    const { appName } = req.body;
+    const appName = req.body.appName || req.query.appName;
 
     if (!appName) {
       return res.status(400).json({ 
@@ -15,40 +19,54 @@ export const analyzeAppReviews = async (req: Request, res: Response) => {
       });
     }
 
-    // Get app info and reviews
-    const { appInfo, reviews } = await reviewService.getAppReviews(appName);
+    // Forward the request to FastAPI backend
+    try {
+      console.log(`Forwarding request to FastAPI backend: ${FASTAPI_URL}/api/reviews/analyze?app_name=${encodeURIComponent(appName)}`);
+      const fastApiResponse = await axios.post(`${FASTAPI_URL}/api/reviews/analyze`, null, {
+        params: { app_name: appName }
+      });
+      
+      return res.status(200).json(fastApiResponse.data);
+    } catch (fastApiError: any) {
+      console.error('Error from FastAPI backend:', fastApiError.response?.data || fastApiError.message);
+      
+      // If we got a response from FastAPI with an error
+      if (fastApiError.response) {
+        return res.status(fastApiError.response.status).json(fastApiError.response.data);
+      }
+      
+      // Fallback to legacy implementation if FastAPI is not available
+      console.log('Falling back to legacy implementation...');
+      const { appInfo, reviews } = await reviewService.getAppReviews(appName as string);
+      const analyzedReviews = await reviewService.analyzeSentiment(reviews);
+      const sentimentData = reviewService.calculateSentimentData(analyzedReviews);
 
-    // Analyze sentiment
-    const analyzedReviews = await reviewService.analyzeSentiment(reviews);
+      // Store the analysis result
+      const analysisData = {
+        appName: appInfo.name,
+        packageName: appInfo.packageName,
+        developerName: appInfo.developer,
+        appIcon: appInfo.icon,
+        appRating: appInfo.rating,
+        reviewCount: sentimentData.reviewCount,
+        averageSentiment: sentimentData.averageScore,
+        positivePercentage: sentimentData.positivePercentage,
+        negativePercentage: sentimentData.negativePercentage,
+        neutralPercentage: sentimentData.neutralPercentage,
+        sampleReviews: analyzedReviews.slice(0, 10),
+      };
 
-    // Calculate sentiment data
-    const sentimentData = reviewService.calculateSentimentData(analyzedReviews);
+      const savedAnalysis = await storage.createAppAnalysis(analysisData);
 
-    // Store the analysis result
-    const analysisData = {
-      appName: appInfo.name,
-      packageName: appInfo.packageName,
-      developerName: appInfo.developer,
-      appIcon: appInfo.icon,
-      appRating: appInfo.rating,
-      reviewCount: sentimentData.reviewCount,
-      averageSentiment: sentimentData.averageScore,
-      positivePercentage: sentimentData.positivePercentage,
-      negativePercentage: sentimentData.negativePercentage,
-      neutralPercentage: sentimentData.neutralPercentage,
-      sampleReviews: analyzedReviews.slice(0, 10),
-    };
+      // Build response object
+      const result = {
+        appInfo,
+        sentiment: sentimentData,
+        reviews: analyzedReviews,
+      };
 
-    const savedAnalysis = await storage.createAppAnalysis(analysisData);
-
-    // Build response object
-    const result = {
-      appInfo,
-      sentimentData,
-      reviewSamples: analyzedReviews.slice(0, 10),
-    };
-
-    return res.status(200).json(result);
+      return res.status(200).json(result);
+    }
   } catch (error) {
     console.error('Error analyzing app reviews:', error);
     
@@ -70,8 +88,19 @@ export const analyzeAppReviews = async (req: Request, res: Response) => {
 
 export const getAppAnalysisHistory = async (_req: Request, res: Response) => {
   try {
-    const history = await storage.getAppAnalysisHistory();
-    return res.status(200).json(history);
+    // Forward the request to FastAPI backend
+    try {
+      console.log(`Forwarding request to FastAPI backend: ${FASTAPI_URL}/api/reviews/history`);
+      const fastApiResponse = await axios.get(`${FASTAPI_URL}/api/reviews/history`);
+      return res.status(200).json(fastApiResponse.data);
+    } catch (fastApiError: any) {
+      console.error('Error from FastAPI backend:', fastApiError.response?.data || fastApiError.message);
+      
+      // If FastAPI failed, fall back to the legacy implementation
+      console.log('Falling back to legacy implementation...');
+      const history = await storage.getAppAnalysisHistory();
+      return res.status(200).json(history);
+    }
   } catch (error) {
     console.error('Error fetching analysis history:', error);
     return res.status(500).json({ 
@@ -88,33 +117,44 @@ export const getAppAnalysisById = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid analysis ID' });
     }
     
-    const analysis = await storage.getAppAnalysis(id);
-    
-    if (!analysis) {
-      return res.status(404).json({ message: 'Analysis not found' });
+    // Forward the request to FastAPI backend
+    try {
+      console.log(`Forwarding request to FastAPI backend: ${FASTAPI_URL}/api/reviews/${id}`);
+      const fastApiResponse = await axios.get(`${FASTAPI_URL}/api/reviews/${id}`);
+      return res.status(200).json(fastApiResponse.data);
+    } catch (fastApiError: any) {
+      console.error('Error from FastAPI backend:', fastApiError.response?.data || fastApiError.message);
+      
+      // If FastAPI failed, fall back to the legacy implementation
+      console.log('Falling back to legacy implementation...');
+      const analysis = await storage.getAppAnalysis(id);
+      
+      if (!analysis) {
+        return res.status(404).json({ message: 'Analysis not found' });
+      }
+
+      // Rebuild the analysis result format
+      const result = {
+        appInfo: {
+          name: analysis.appName,
+          packageName: analysis.packageName,
+          developer: analysis.developerName,
+          icon: analysis.appIcon,
+          rating: analysis.appRating,
+        },
+        sentiment: {
+          averageScore: analysis.averageSentiment,
+          reviewCount: analysis.reviewCount,
+          date: format(new Date(analysis.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+          positivePercentage: analysis.positivePercentage,
+          negativePercentage: analysis.negativePercentage,
+          neutralPercentage: analysis.neutralPercentage,
+        },
+        reviews: analysis.sampleReviews,
+      };
+
+      return res.status(200).json(result);
     }
-
-    // Rebuild the analysis result format
-    const result = {
-      appInfo: {
-        name: analysis.appName,
-        packageName: analysis.packageName,
-        developer: analysis.developerName,
-        icon: analysis.appIcon,
-        rating: analysis.appRating,
-      },
-      sentimentData: {
-        averageScore: analysis.averageSentiment,
-        reviewCount: analysis.reviewCount,
-        date: format(new Date(analysis.createdAt), 'MMM d, yyyy'),
-        positivePercentage: analysis.positivePercentage,
-        negativePercentage: analysis.negativePercentage,
-        neutralPercentage: analysis.neutralPercentage,
-      },
-      reviewSamples: analysis.sampleReviews,
-    };
-
-    return res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching analysis by ID:', error);
     return res.status(500).json({ 
@@ -125,8 +165,19 @@ export const getAppAnalysisById = async (req: Request, res: Response) => {
 
 export const clearAppAnalysisHistory = async (_req: Request, res: Response) => {
   try {
-    await storage.clearAppAnalysisHistory();
-    return res.status(200).json({ message: 'Analysis history cleared' });
+    // Forward the request to FastAPI backend
+    try {
+      console.log(`Forwarding request to FastAPI backend: ${FASTAPI_URL}/api/reviews/history`);
+      const fastApiResponse = await axios.delete(`${FASTAPI_URL}/api/reviews/history`);
+      return res.status(200).json(fastApiResponse.data);
+    } catch (fastApiError: any) {
+      console.error('Error from FastAPI backend:', fastApiError.response?.data || fastApiError.message);
+      
+      // If FastAPI failed, fall back to the legacy implementation
+      console.log('Falling back to legacy implementation...');
+      await storage.clearAppAnalysisHistory();
+      return res.status(200).json({ message: 'Analysis history cleared' });
+    }
   } catch (error) {
     console.error('Error clearing analysis history:', error);
     return res.status(500).json({ 
