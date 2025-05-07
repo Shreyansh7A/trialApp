@@ -1,3 +1,4 @@
+// @ts-ignore - handling ESM module in CommonJS
 import gplay from 'google-play-scraper';
 import { analyzeSentiment as openAiAnalyzeSentiment } from '@/lib/openai';
 import { format } from 'date-fns';
