@@ -134,3 +134,24 @@ export const clearAppAnalysisHistory = async (_req: Request, res: Response) => {
     });
   }
 };
+
+export const searchAppSuggestions = async (req: Request, res: Response) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ 
+        message: 'Search query is required' 
+      });
+    }
+
+    // Search for app suggestions
+    const suggestions = await reviewService.searchAppSuggestions(query);
+    return res.status(200).json(suggestions);
+  } catch (error) {
+    console.error('Error searching app suggestions:', error);
+    return res.status(500).json({ 
+      message: 'Failed to search for app suggestions' 
+    });
+  }
+};
