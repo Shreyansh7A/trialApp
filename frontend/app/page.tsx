@@ -1,25 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SearchForm from '../components/SearchForm';
 import ResultsCard from '../components/ResultsCard';
 import SearchHistory from '../components/SearchHistory';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import { analyzeAppReviews, getAnalysisHistory, clearAnalysisHistory } from '../lib/api';
+import { analyzeAppReviews, getAnalysisHistory, getAnalysisById, clearAnalysisHistory } from '../lib/api';
 import type { AnalysisResult, AppAnalysis } from '../lib/types';
 
 export default function Home() {
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [historyItems, setHistoryItems] = useState<AppAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [historyItems, setHistoryItems] = useState<AppAnalysis[]>([]);
-
-  // Fetch history on mount
-  useState(() => {
+  
+  useEffect(() => {
     fetchHistory();
-  });
-
+  }, []);
+  
   async function fetchHistory() {
     try {
       const history = await getAnalysisHistory();
@@ -28,70 +27,100 @@ export default function Home() {
       console.error('Error fetching history:', err);
     }
   }
-
+  
   async function handleSearch(appName: string) {
     setIsLoading(true);
     setError(null);
-    setResult(null);
+    setAnalysisResult(null);
     
     try {
-      const data = await analyzeAppReviews(appName);
-      setResult(data);
-      await fetchHistory(); // Refresh history after new analysis
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      const result = await analyzeAppReviews(appName);
+      setAnalysisResult(result);
+      fetchHistory(); // Refresh history after analysis
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while analyzing the app reviews');
     } finally {
       setIsLoading(false);
     }
   }
-
+  
+  async function handleLoadHistoryItem(id: number) {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const result = await getAnalysisById(id);
+      setAnalysisResult(result);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load analysis');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+  
   async function handleClearHistory() {
     try {
       await clearAnalysisHistory();
       setHistoryItems([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear history');
+    } catch (err: any) {
+      setError(err.message || 'Failed to clear history');
     }
   }
-
+  
   function handleNewAnalysis() {
-    setResult(null);
+    setAnalysisResult(null);
+  }
+  
+  function handleDismissError() {
+    setError(null);
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <header className="text-center mb-12">
-        <h1 className="heading-text mb-4">
+    <main className="container mx-auto px-4 py-8">
+      <header className="mb-8 text-center">
+        <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary-600 to-blue-600 bg-clip-text text-transparent">
           App Review Sentiment Analyzer
         </h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Analyze the sentiment of the latest reviews for any Android app on Google Play Store
+        <p className="text-gray-600 max-w-2xl mx-auto">
+          Analyze the sentiment of Google Play Store reviews for any Android app. Discover how users really feel about an application with AI-powered sentiment analysis.
         </p>
       </header>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          {!result && !isLoading && !error && (
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-1">
+          {!analysisResult && !isLoading && !error && (
             <SearchForm onSubmit={handleSearch} isLoading={isLoading} />
           )}
           
-          {isLoading && <LoadingState />}
-          
-          {error && <ErrorState errorMessage={error} onDismiss={() => setError(null)} />}
-          
-          {result && !isLoading && !error && (
-            <ResultsCard result={result} onNewAnalysis={handleNewAnalysis} />
+          {historyItems.length > 0 && !isLoading && (
+            <div className="mt-6">
+              <SearchHistory 
+                historyItems={historyItems}
+                onLoadHistoryItem={handleLoadHistoryItem}
+                onClearHistory={handleClearHistory}
+              />
+            </div>
           )}
         </div>
         
-        <div className="md:col-span-1">
-          <SearchHistory 
-            historyItems={historyItems} 
-            onClearHistory={handleClearHistory}
-            onLoadHistoryItem={() => {}} // We'll implement this later
-          />
+        <div className="md:col-span-2">
+          {isLoading && <LoadingState />}
+          
+          {error && (
+            <ErrorState 
+              errorMessage={error} 
+              onDismiss={handleDismissError} 
+            />
+          )}
+          
+          {analysisResult && !isLoading && !error && (
+            <ResultsCard 
+              result={analysisResult} 
+              onNewAnalysis={handleNewAnalysis} 
+            />
+          )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

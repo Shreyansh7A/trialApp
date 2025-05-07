@@ -1,32 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-import uvicorn
-import os
-import json
-from datetime import datetime
+from typing import List, Optional
 import google_play_scraper as gplay
 from google_play_scraper.exceptions import NotFoundError
-from dotenv import load_dotenv
 import openai
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-# Load environment variables
-load_dotenv()
-
-# Set up OpenAI client
-openai.api_key = os.getenv("OPENAI_API_KEY")
+import os
+from datetime import datetime
+import json
 
 # Initialize FastAPI app
-app = FastAPI(
-    title="App Review Sentiment Analyzer",
-    description="API for analyzing sentiment of Google Play Store reviews",
-    version="1.0.0"
-)
+app = FastAPI(title="App Review Sentiment Analyzer")
 
-# Add CORS middleware
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, replace with specific origins
@@ -35,7 +21,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Models
+# Check for OpenAI API key
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    print("Warning: OPENAI_API_KEY environment variable not set")
+
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=openai_api_key)
+
+# Define Pydantic models
 class AppInfo(BaseModel):
     name: str
     packageName: str
@@ -79,207 +73,147 @@ class AppAnalysis(BaseModel):
 
 # In-memory storage for analysis history
 analysis_history = []
-current_id = 1
+next_analysis_id = 1
 
-# Helper function to analyze sentiment using OpenAI
 async def analyze_sentiment(text: str):
+    """Analyze sentiment of a text using OpenAI API."""
     try:
-        response = await openai.chat.completions.create(
-            model="gpt-4o",  # the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",  # the newest OpenAI model is "gpt-4o" which was released May 13, 2024
             messages=[
-                {"role": "system", "content": "You are a sentiment analysis expert. Analyze the sentiment of the provided text and return a JSON object with: 'sentiment' (positive, negative, or neutral) and 'score' (0-100 where 0 is extremely negative, 50 is neutral, and 100 is extremely positive). Consider both the tone and content of the text."},
+                {
+                    "role": "system",
+                    "content": "You are a sentiment analysis expert. Analyze the sentiment of the review and provide a rating. Return ONLY a JSON object with these fields: sentiment (string: 'positive', 'negative', or 'neutral'), score (number from 0 to 100, where 0 is most negative and 100 is most positive)."
+                },
                 {"role": "user", "content": text}
             ],
             response_format={"type": "json_object"}
         )
-        
         result = json.loads(response.choices[0].message.content)
-        return {
-            "sentiment": result["sentiment"],
-            "score": result["score"]
-        }
+        return result["sentiment"], result["score"]
     except Exception as e:
         print(f"Error analyzing sentiment: {e}")
-        return {
-            "sentiment": "neutral",
-            "score": 50
-        }
+        return "neutral", 50  # Default fallback
 
-# Routes
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "API is running"}
+    """Root endpoint."""
+    return {"message": "App Review Sentiment Analyzer API"}
 
 @app.post("/api/reviews/analyze")
 async def analyze_app_reviews(app_name: str):
+    """Analyze reviews for a specific app."""
+    global next_analysis_id
+    
     try:
-        # First determine if input is a package name or app title
-        app_id = app_name
-        
-        # If it doesn't look like a package name, search for it
-        if "." not in app_name:
-            search_results = gplay.search(app_name, n_hits=1)
-            
-            if not search_results:
-                raise HTTPException(status_code=404, detail=f"No app found with name: {app_name}")
-            
-            app_id = search_results[0]["appId"]
-        
         # Get app details
-        try:
-            app_details = gplay.app(app_id)
-        except NotFoundError:
-            raise HTTPException(status_code=404, detail=f"App not found: {app_id}")
+        app_details = gplay.app(app_name)
         
-        # Get recent reviews (100)
-        reviews_result = gplay.reviews(
-            app_id,
-            lang='en',
-            country='us',
-            sort=gplay.Sort.NEWEST,
-            count=100
+        # Get reviews
+        reviews_result, _ = gplay.reviews(
+            app_name,
+            count=100,  # Get 100 most recent reviews
+            lang='en',  # English reviews only
+            sort=gplay.Sort.NEWEST  # Most recent reviews
         )
         
-        raw_reviews = reviews_result[0]
-        
         # Process reviews with sentiment analysis
-        async def process_review(review):
-            if not review["content"] or review["content"].strip() == "":
-                return None
-            
-            sentiment_result = await analyze_sentiment(review["content"])
-            
-            return {
-                "id": review["reviewId"],
-                "userName": review["userName"],
-                "userImage": review.get("userImage"),
-                "content": review["content"],
-                "score": review["score"],
-                "thumbsUpCount": review["thumbsUp"],
-                "reviewCreatedVersion": review.get("reviewCreatedVersion"),
-                "at": review["at"],
-                "replyContent": review.get("replyContent"),
-                "replyAt": review.get("replyAt"),
-                "sentiment": sentiment_result["sentiment"],
-                "sentimentScore": sentiment_result["score"]
-            }
-        
-        # Process reviews in parallel with a limit of 5 concurrent requests
-        reviews = []
-        
-        # Create a semaphore to limit concurrent API calls
-        sem = asyncio.Semaphore(5)
-        
-        async def process_with_semaphore(review):
-            async with sem:
-                return await process_review(review)
-        
-        # Process reviews in parallel
-        tasks = [process_with_semaphore(review) for review in raw_reviews]
-        processed_reviews = await asyncio.gather(*tasks)
-        reviews = [r for r in processed_reviews if r is not None]
+        analyzed_reviews = []
+        for review in reviews_result:
+            sentiment, score = await analyze_sentiment(review['content'])
+            analyzed_reviews.append(Review(
+                id=review['reviewId'],
+                userName=review.get('userName'),
+                userImage=review.get('userImage'),
+                content=review['content'],
+                score=review['score'],
+                thumbsUpCount=review['thumbsUpCount'],
+                reviewCreatedVersion=review.get('reviewCreatedVersion'),
+                at=review['at'],
+                replyContent=review.get('replyContent'),
+                replyAt=review.get('replyAt'),
+                sentiment=sentiment,
+                sentimentScore=score
+            ))
         
         # Calculate sentiment statistics
-        def calculate_sentiment_data(reviews):
-            review_count = len(reviews)
-            
-            if review_count == 0:
-                return {
-                    "averageScore": 0,
-                    "reviewCount": 0,
-                    "date": datetime.now().strftime("%b %d, %Y"),
-                    "positivePercentage": 0,
-                    "negativePercentage": 0,
-                    "neutralPercentage": 0
-                }
-            
-            total_score = 0
-            positive_count = 0
-            negative_count = 0
-            neutral_count = 0
-            
-            for review in reviews:
-                total_score += review["sentimentScore"]
-                
-                if review["sentiment"] == "positive":
-                    positive_count += 1
-                elif review["sentiment"] == "negative":
-                    negative_count += 1
-                else:
-                    neutral_count += 1
-            
-            average_score = round(total_score / review_count)
-            positive_percentage = round((positive_count / review_count) * 100)
-            negative_percentage = round((negative_count / review_count) * 100)
-            neutral_percentage = 100 - positive_percentage - negative_percentage
-            
-            return {
-                "averageScore": average_score,
-                "reviewCount": review_count,
-                "date": datetime.now().strftime("%b %d, %Y"),
-                "positivePercentage": positive_percentage,
-                "negativePercentage": negative_percentage,
-                "neutralPercentage": neutral_percentage
-            }
+        positive_reviews = [r for r in analyzed_reviews if r.sentiment == 'positive']
+        negative_reviews = [r for r in analyzed_reviews if r.sentiment == 'negative']
+        neutral_reviews = [r for r in analyzed_reviews if r.sentiment == 'neutral']
         
-        sentiment_data = calculate_sentiment_data(reviews)
+        total_reviews = len(analyzed_reviews)
+        positive_percentage = round((len(positive_reviews) / total_reviews) * 100) if total_reviews > 0 else 0
+        negative_percentage = round((len(negative_reviews) / total_reviews) * 100) if total_reviews > 0 else 0
+        neutral_percentage = 100 - positive_percentage - negative_percentage
         
-        app_info = {
-            "name": app_details["title"],
-            "packageName": app_details["appId"],
-            "developer": app_details["developer"],
-            "icon": app_details["icon"],
-            "rating": str(app_details["score"])
-        }
+        average_score = sum(r.sentimentScore for r in analyzed_reviews) / total_reviews if total_reviews > 0 else 50
+        
+        # Create app info
+        app_info = AppInfo(
+            name=app_details['title'],
+            packageName=app_details['appId'],
+            developer=app_details['developer'],
+            icon=app_details['icon'],
+            rating=str(app_details['score'])
+        )
+        
+        # Create sentiment data
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sentiment_data = SentimentData(
+            averageScore=round(average_score, 1),
+            reviewCount=total_reviews,
+            date=current_date,
+            positivePercentage=positive_percentage,
+            negativePercentage=negative_percentage,
+            neutralPercentage=neutral_percentage
+        )
         
         # Create result
-        result = {
-            "appInfo": app_info,
-            "sentiment": sentiment_data,
-            "reviews": reviews
-        }
+        result = AnalysisResult(
+            appInfo=app_info,
+            sentiment=sentiment_data,
+            reviews=analyzed_reviews
+        )
         
         # Save to history
-        global current_id
-        analysis = {
-            "id": current_id,
-            "appName": app_details["title"],
-            "sentimentScore": sentiment_data["averageScore"],
-            "date": datetime.now().strftime("%b %d, %Y"),
-            "appIcon": app_details["icon"]
-        }
-        analysis_history.append(analysis)
-        current_id += 1
+        analysis_entry = AppAnalysis(
+            id=next_analysis_id,
+            appName=app_info.name,
+            sentimentScore=round(average_score, 1),
+            date=current_date,
+            appIcon=app_info.icon
+        )
+        analysis_history.append(analysis_entry)
+        
+        # Store the full result in memory (this would go to a database in a production app)
+        analysis_entry.full_result = result
+        
+        # Increment ID for next analysis
+        next_analysis_id += 1
         
         return result
-    
+        
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail=f"App not found: {app_name}")
     except Exception as e:
-        print(f"Error analyzing app reviews: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to analyze app reviews: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing app reviews: {str(e)}")
 
-@app.get("/api/reviews/history")
+@app.get("/api/reviews/history", response_model=List[AppAnalysis])
 async def get_app_analysis_history():
+    """Get history of app analyses."""
     return analysis_history
 
-@app.get("/api/reviews/{id}")
+@app.get("/api/reviews/{id}", response_model=AnalysisResult)
 async def get_app_analysis_by_id(id: int):
-    # This is a simplified implementation since we don't have persistent storage
-    # In a real application, you would retrieve the analysis from a database
-    for item in analysis_history:
-        if item["id"] == id:
-            # For demonstration purposes, we'll return a mock analysis
-            # In a real application, you'd retrieve the full analysis from storage
-            raise HTTPException(status_code=404, detail=f"Full analysis data not available for id: {id}")
-    
-    raise HTTPException(status_code=404, detail=f"Analysis not found for id: {id}")
+    """Get a specific app analysis by ID."""
+    for analysis in analysis_history:
+        if analysis.id == id:
+            return analysis.full_result
+    raise HTTPException(status_code=404, detail=f"Analysis with ID {id} not found")
 
 @app.delete("/api/reviews/history")
 async def clear_app_analysis_history():
+    """Clear the app analysis history."""
     global analysis_history
     analysis_history = []
     return {"message": "Analysis history cleared"}
-
-# Run the application
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
