@@ -13,9 +13,20 @@ interface ResultsCardProps {
 
 export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
   const [showAllReviews, setShowAllReviews] = useState(false);
-  const { appInfo, sentimentData, reviewSamples } = result;
+  const { appInfo } = result;
+
+  // Handle both 'sentiment' and 'sentimentData' naming from different backends
+  const sentimentData = result.sentiment || result.sentimentData;
+  if (!sentimentData) {
+    throw new Error("Missing sentiment data in result");
+  }
   
-  const displayedReviews = showAllReviews ? reviewSamples : reviewSamples.slice(0, 3);
+  // TypeScript type assertion to avoid "possibly undefined" errors
+  const sentiment = sentimentData as NonNullable<typeof sentimentData>;
+  
+  // Handle both 'reviews' and 'reviewSamples' naming from different backends
+  const reviewData = result.reviews || result.reviewSamples || [];
+  const displayedReviews = showAllReviews ? reviewData : reviewData.slice(0, 3);
   
   const getSentimentBadgeProps = (sentiment: string | null) => {
     switch (sentiment) {
@@ -64,7 +75,7 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
   };
   
   // Calculate left position for sentiment indicator based on average score
-  const indicatorLeftPosition = `${sentimentData.averageScore}%`;
+  const indicatorLeftPosition = `${sentiment.averageScore}%`;
 
   return (
     <Card className="mb-8 animate-fade-in">
@@ -115,7 +126,7 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
             </h3>
             <div className="flex items-end">
               <span className="text-3xl font-bold text-neutral-800 dark:text-neutral-100">
-                {sentimentData.averageScore}%
+                {sentiment.averageScore}%
               </span>
               <span className="ml-1 text-sm text-gray-500 dark:text-gray-400 mb-1">
                 positive
@@ -144,23 +155,23 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Reviews Analyzed</p>
                 <p className="text-xl font-bold text-neutral-800 dark:text-neutral-100">
-                  {sentimentData.reviewCount}
+                  {sentiment.reviewCount}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Analysis Date</p>
                 <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">
-                  {sentimentData.date}
+                  {sentiment.date}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Positive</p>
                 <div className="flex items-center">
                   <span className="text-xl font-bold text-green-500 dark:text-green-400 mr-1">
-                    {sentimentData.positivePercentage}%
+                    {sentiment.positivePercentage}%
                   </span>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    ({Math.round(sentimentData.reviewCount * sentimentData.positivePercentage / 100)})
+                    ({Math.round(sentiment.reviewCount * sentiment.positivePercentage / 100)})
                   </span>
                 </div>
               </div>
@@ -168,10 +179,10 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Negative</p>
                 <div className="flex items-center">
                   <span className="text-xl font-bold text-red-500 dark:text-red-400 mr-1">
-                    {sentimentData.negativePercentage}%
+                    {sentiment.negativePercentage}%
                   </span>
                   <span className="text-sm text-gray-500 dark:text-gray-400">
-                    ({Math.round(sentimentData.reviewCount * sentimentData.negativePercentage / 100)})
+                    ({Math.round(sentiment.reviewCount * sentiment.negativePercentage / 100)})
                   </span>
                 </div>
               </div>
@@ -220,7 +231,7 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Sample Reviews Analyzed
             </h3>
-            {reviewSamples.length > 3 && (
+            {reviewData.length > 3 && (
               <Button 
                 variant="link" 
                 className="text-primary dark:text-blue-400 text-sm p-0 h-auto"

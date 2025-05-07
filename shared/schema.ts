@@ -66,10 +66,25 @@ export const sentimentAnalysisSchema = z.object({
   neutralPercentage: z.number(),
 });
 
+// Version compatibility: support both FastAPI format and legacy Express format
 export const analysisResultSchema = z.object({
   appInfo: appInfoSchema,
-  sentimentData: sentimentAnalysisSchema,
-  reviewSamples: z.array(reviewSchema),
+  // Support both naming conventions
+  sentiment: sentimentAnalysisSchema.optional(),
+  sentimentData: sentimentAnalysisSchema.optional(),
+  // Support both naming conventions
+  reviews: z.array(reviewSchema).optional(),
+  reviewSamples: z.array(reviewSchema).optional(),
+}).refine(data => {
+  // Ensure at least one of the sentiment fields exists
+  return !!(data.sentiment || data.sentimentData);
+}, {
+  message: "Either 'sentiment' or 'sentimentData' must be provided"
+}).refine(data => {
+  // Ensure at least one of the reviews fields exists
+  return !!(data.reviews || data.reviewSamples);
+}, {
+  message: "Either 'reviews' or 'reviewSamples' must be provided"
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
