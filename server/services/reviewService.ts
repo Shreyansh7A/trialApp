@@ -1,8 +1,16 @@
-import gplay from 'google-play-scraper';
+import * as gplay from 'google-play-scraper';
 import { analyzeSentiment as openAiAnalyzeSentiment } from '@/lib/openai';
 import { format } from 'date-fns';
 import pLimit from 'p-limit';
 import { Review, AppInfo } from '@shared/schema';
+
+// Interface for app suggestion results
+export interface AppSuggestion {
+  title: string;
+  appId: string;
+  developer: string;
+  icon: string;
+}
 
 // Rate limit for API calls (5 per second)
 const limit = pLimit(5);
@@ -118,7 +126,30 @@ export async function analyzeSentiment(reviews: gplay.IReviewsItem[]): Promise<R
   }
 }
 
-// Calculate sentiment statistics
+// Search for app suggestions by query term
+export async function searchAppSuggestions(query: string, limit: number = 5): Promise<AppSuggestion[]> {
+  if (!query || query.trim().length < 2) {
+    return [];
+  }
+
+  try {
+    const searchResults = await gplay.search({
+      term: query,
+      num: limit
+    });
+    
+    return searchResults.map((app: any) => ({
+      title: app.title,
+      appId: app.appId,
+      developer: app.developer,
+      icon: app.icon
+    }));
+  } catch (error) {
+    console.error('Error searching for app suggestions:', error);
+    return [];
+  }
+}
+
 export function calculateSentimentData(reviews: Review[]) {
   const reviewCount = reviews.length;
   
