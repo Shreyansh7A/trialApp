@@ -197,29 +197,29 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
           <div className="h-5 flex rounded-full overflow-hidden">
             <div 
               className="bg-green-500" 
-              style={{ width: `${sentimentData.positivePercentage}%` }}
+              style={{ width: `${sentiment.positivePercentage}%` }}
             ></div>
             <div 
               className="bg-yellow-400" 
-              style={{ width: `${sentimentData.neutralPercentage}%` }}
+              style={{ width: `${sentiment.neutralPercentage}%` }}
             ></div>
             <div 
               className="bg-red-500" 
-              style={{ width: `${sentimentData.negativePercentage}%` }}
+              style={{ width: `${sentiment.negativePercentage}%` }}
             ></div>
           </div>
           <div className="flex flex-wrap text-xs mt-1 gap-4">
             <div className="flex items-center">
               <div className="w-3 h-3 bg-green-500 rounded-full mr-1"></div>
-              <span>Positive ({sentimentData.positivePercentage}%)</span>
+              <span>Positive ({sentiment.positivePercentage}%)</span>
             </div>
             <div className="flex items-center">
               <div className="w-3 h-3 bg-yellow-400 rounded-full mr-1"></div>
-              <span>Neutral ({sentimentData.neutralPercentage}%)</span>
+              <span>Neutral ({sentiment.neutralPercentage}%)</span>
             </div>
             <div className="flex items-center">
               <div className="w-3 h-3 bg-red-500 rounded-full mr-1"></div>
-              <span>Negative ({sentimentData.negativePercentage}%)</span>
+              <span>Negative ({sentiment.negativePercentage}%)</span>
             </div>
           </div>
         </div>
@@ -242,7 +242,7 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
             )}
           </div>
           
-          {displayedReviews.map((review, index) => (
+          {displayedReviews.map((review: Review, index: number) => (
             <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-md p-4 mb-3 last:mb-0">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
