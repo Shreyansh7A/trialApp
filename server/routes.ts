@@ -7,7 +7,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API routes
   app.post('/api/reviews/analyze', reviewController.analyzeAppReviews);
   app.get('/api/reviews/history', reviewController.getAppAnalysisHistory);
-  app.get('/api/reviews/search', reviewController.searchAppSuggestions);
   app.get('/api/reviews/:id', reviewController.getAppAnalysisById);
   app.delete('/api/reviews/history', reviewController.clearAppAnalysisHistory);
 

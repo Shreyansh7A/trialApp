@@ -1,175 +1,58 @@
+import gplay from 'google-play-scraper';
 import { analyzeSentiment as openAiAnalyzeSentiment } from '@/lib/openai';
 import { format } from 'date-fns';
 import pLimit from 'p-limit';
 import { Review, AppInfo } from '@shared/schema';
 
-// Interface for app suggestion results
-export interface AppSuggestion {
-  title: string;
-  appId: string;
-  developer: string;
-  icon: string;
-}
-
-// Mock data for popular Android apps
-const popularApps = [
-  {
-    title: 'Instagram',
-    appId: 'com.instagram.android',
-    developer: 'Instagram',
-    icon: 'https://play-lh.googleusercontent.com/c2DcVsBUhJb3a-Q-LOdCfPbkWr2DI7UCiKpYXoHi4FpHtQ0ZOGd1MV5x_mRNxQevB98=s180-rw'
-  },
-  {
-    title: 'Facebook',
-    appId: 'com.facebook.katana',
-    developer: 'Meta Platforms, Inc.',
-    icon: 'https://play-lh.googleusercontent.com/ccWDU4A7fX1R24v-vvT480ySh26AYp97g1VrIB_FIdjRcuQB2JP2WdY7h_wVVAeSpg=s180-rw'
-  },
-  {
-    title: 'WhatsApp Messenger',
-    appId: 'com.whatsapp',
-    developer: 'WhatsApp LLC',
-    icon: 'https://play-lh.googleusercontent.com/bYtqbOcTYOlgc6gqZ2rwb8lptHuwlNE75zYJu6Bn076-hTmvd96HH-6v7S0YUAAJXoJN=s180-rw'
-  },
-  {
-    title: 'TikTok',
-    appId: 'com.zhiliaoapp.musically',
-    developer: 'TikTok Pte. Ltd.',
-    icon: 'https://play-lh.googleusercontent.com/iBYjvXUKh9H_w-1JrGhE8UuHEZIYfpzbKLTtaUIVxYELH6vdID-4bqr6GS_iVLHVuh8=s180-rw'
-  },
-  {
-    title: 'Spotify: Music and Podcasts',
-    appId: 'com.spotify.music',
-    developer: 'Spotify AB',
-    icon: 'https://play-lh.googleusercontent.com/UrY7BAZ-XfXGpfkeWg0zCCeo-7ras4DCoRalC_WXXWTK9q5b0Iw7B0YQMsVxZaNB7DM=s180-rw'
-  },
-  {
-    title: 'Netflix',
-    appId: 'com.netflix.mediaclient',
-    developer: 'Netflix, Inc.',
-    icon: 'https://play-lh.googleusercontent.com/TBRwjS_qfJCSj1m7zZB93FnpJM5fSpMA_wUlFDLxWAb45T9RmwBvQd5cWR5viJJOhkI=s180-rw'
-  },
-  {
-    title: 'YouTube',
-    appId: 'com.google.android.youtube',
-    developer: 'Google LLC',
-    icon: 'https://play-lh.googleusercontent.com/lMoItBgdPPVDJsNOVtP26EKHePkwBg-PkuY9NOrc-fumRtTFP4XhpUNk_22syN4Datc=s180-rw'
-  },
-  {
-    title: 'Google Maps',
-    appId: 'com.google.android.apps.maps',
-    developer: 'Google LLC',
-    icon: 'https://play-lh.googleusercontent.com/Kf8WTct65hFJxBUDm5E-EpYsiDoLQiGGbnuyP6HBNax43YShXti9THPon1YKB6zPYpA=s180-rw'
-  },
-  {
-    title: 'Gmail',
-    appId: 'com.google.android.gm',
-    developer: 'Google LLC',
-    icon: 'https://play-lh.googleusercontent.com/KSuaRLiI_FlDP8cM4MzJ23ml3og5Hxb9AapaGTMZ2GgR103mvJ3AAnoOFz1yheeQBBI=s180-rw'
-  },
-  {
-    title: 'Amazon Shopping',
-    appId: 'com.amazon.mShop.android.shopping',
-    developer: 'Amazon Mobile LLC',
-    icon: 'https://play-lh.googleusercontent.com/QPKtPRTJyhrYoPqYmjpYQadVGqIvKO0Vy-QdZJQjUrGY-Qr8qok6cgnEZk3WGAS3Ls4=s180-rw'
-  }
-];
-
 // Rate limit for API calls (5 per second)
 const limit = pLimit(5);
 
-// Sample review data structure
-interface ReviewItem {
-  id: string;
-  userName: string;
-  userImage: string | null;
-  text: string;
-  score: number;
-  thumbsUp: number;
-  reviewCreatedVersion: string | null;
-  at: string;
-  replyText: string | null;
-  repliedAt: string | null;
-}
-
 interface AppReviewsResult {
   appInfo: AppInfo;
-  reviews: ReviewItem[];
+  reviews: gplay.IReviewsItem[];
 }
 
-// Generate mock reviews for an app
-function generateMockReviews(appId: string, count: number = 100): ReviewItem[] {
-  const reviews: ReviewItem[] = [];
-  const possibleScores = [1, 2, 3, 4, 5];
-  const possibleTexts = [
-    "I love this app, it's the best!",
-    "Works great most of the time, but sometimes crashes.",
-    "Horrible experience, can't even log in.",
-    "The latest update fixed all my issues, very happy now.",
-    "Average app, nothing special but gets the job done.",
-    "Would be better if it had more features.",
-    "Great user interface but slow performance.",
-    "App is good but battery usage is excessive.",
-    "Best app in its category, highly recommend!",
-    "Constantly crashes on my device, uninstalling.",
-    "Love the new features in the recent update.",
-    "Can't believe this app is free, it's amazing!",
-    "Ads are too intrusive, ruins the experience.",
-    "Solid app, been using it for years.",
-    "Customer support is excellent, fixed my issue quickly."
-  ];
-  
-  for (let i = 0; i < count; i++) {
-    const randomScore = possibleScores[Math.floor(Math.random() * possibleScores.length)];
-    const randomText = possibleTexts[Math.floor(Math.random() * possibleTexts.length)];
-    const randomDate = new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000));
-    
-    reviews.push({
-      id: `review-${appId}-${i}`,
-      userName: `User${i}`,
-      userImage: null,
-      text: randomText,
-      score: randomScore,
-      thumbsUp: Math.floor(Math.random() * 50),
-      reviewCreatedVersion: `1.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
-      at: randomDate.toISOString(),
-      replyText: Math.random() > 0.7 ? "Thank you for your feedback!" : null,
-      repliedAt: Math.random() > 0.7 ? new Date(randomDate.getTime() + 24 * 60 * 60 * 1000).toISOString() : null
-    });
-  }
-  
-  return reviews;
-}
-
-// Fetch app information and reviews (using built-in data)
+// Fetch app information and reviews
 export async function getAppReviews(appNameOrId: string): Promise<AppReviewsResult> {
   try {
-    // Find the app by name or ID
-    let app = popularApps.find(a => a.appId.toLowerCase() === appNameOrId.toLowerCase());
+    // First determine if input is a package name or app title
+    let appId = appNameOrId;
     
-    // If not found by ID, try to find by name
-    if (!app) {
-      app = popularApps.find(a => a.title.toLowerCase().includes(appNameOrId.toLowerCase()));
+    // If it doesn't look like a package name, search for it
+    if (!appNameOrId.includes('.')) {
+      const searchResults = await gplay.search({
+        term: appNameOrId,
+        num: 1
+      });
+      
+      if (searchResults.length === 0) {
+        throw new Error(`No app found with name: ${appNameOrId}`);
+      }
+      
+      appId = searchResults[0].appId;
     }
     
-    if (!app) {
-      throw new Error(`No app found with name or ID: ${appNameOrId}`);
-    }
+    // Get app details
+    const appDetails = await gplay.app({ appId });
     
-    // Generate mock reviews
-    const mockReviews = generateMockReviews(app.appId);
+    // Get recent reviews (100)
+    const reviews = await gplay.reviews({
+      appId,
+      sort: gplay.sort.NEWEST,
+      num: 100
+    });
     
     const appInfo: AppInfo = {
-      name: app.title,
-      packageName: app.appId,
-      developer: app.developer,
-      icon: app.icon,
-      rating: (3 + Math.random() * 2).toFixed(1), // Random rating between 3-5
+      name: appDetails.title,
+      packageName: appDetails.appId,
+      developer: appDetails.developer,
+      icon: appDetails.icon,
+      rating: appDetails.score.toString(),
     };
     
     return {
       appInfo,
-      reviews: mockReviews
+      reviews: reviews.data
     };
   } catch (error) {
     console.error('Error fetching app reviews:', error);
@@ -178,7 +61,7 @@ export async function getAppReviews(appNameOrId: string): Promise<AppReviewsResu
 }
 
 // Analyze sentiment of reviews
-export async function analyzeSentiment(reviews: ReviewItem[]): Promise<Review[]> {
+export async function analyzeSentiment(reviews: gplay.IReviewsItem[]): Promise<Review[]> {
   try {
     // Process reviews with rate limiting
     const analyzedReviews = await Promise.all(
@@ -235,30 +118,7 @@ export async function analyzeSentiment(reviews: ReviewItem[]): Promise<Review[]>
   }
 }
 
-// Search for app suggestions based on query
-export async function searchAppSuggestions(query: string, searchLimit: number = 5): Promise<AppSuggestion[]> {
-  if (!query || query.trim().length < 2) {
-    return [];
-  }
-
-  try {
-    // Filter apps based on query
-    const lowerQuery = query.toLowerCase();
-    const matchingApps = popularApps
-      .filter(app => 
-        app.title.toLowerCase().includes(lowerQuery) || 
-        app.appId.toLowerCase().includes(lowerQuery) ||
-        app.developer.toLowerCase().includes(lowerQuery)
-      )
-      .slice(0, searchLimit);
-    
-    return matchingApps;
-  } catch (error) {
-    console.error('Error searching for app suggestions:', error);
-    return [];
-  }
-}
-
+// Calculate sentiment statistics
 export function calculateSentimentData(reviews: Review[]) {
   const reviewCount = reviews.length;
   
