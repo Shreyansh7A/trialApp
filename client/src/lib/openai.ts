@@ -2,7 +2,7 @@ import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 export const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || "sk-placeholder-key" 
+  apiKey: process.env.OPENAI_API_KEY 
 });
 
 export interface SentimentAnalysisResult {
@@ -29,7 +29,9 @@ export async function analyzeSentiment(text: string): Promise<SentimentAnalysisR
       response_format: { type: "json_object" },
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    // Ensure content is not null
+    const content = response.choices[0]?.message?.content || '{"sentiment":"neutral","score":50,"confidence":0.5}';
+    const result = JSON.parse(content);
 
     return {
       sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
