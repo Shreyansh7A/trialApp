@@ -32,8 +32,11 @@ export const analyzeAppReviews = async (req: Request, res: Response) => {
       
       // If we got a response from FastAPI with an error
       if (fastApiError.response) {
+        // If we got a response with an error status from FastAPI, pass it through
         return res.status(fastApiError.response.status).json(fastApiError.response.data);
       }
+      
+      // Connection refused or other non-response errors
       
       // Fallback to legacy implementation if FastAPI is not available
       console.log('Falling back to legacy implementation...');
