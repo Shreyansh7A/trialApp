@@ -1,20 +1,12 @@
-import React from 'react';
+import '../styles/globals.css';
+import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
-import './globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'App Review Sentiment Analyzer',
-  description: 'Analyze the sentiment of Google Play Store reviews for any Android app.',
-  keywords: 'sentiment analysis, app reviews, google play store, android apps, review analyzer',
-  authors: [{ name: 'App Sentiment Analyzer Team' }],
-  openGraph: {
-    title: 'App Review Sentiment Analyzer',
-    description: 'Analyze the sentiment of Google Play Store reviews for any Android app.',
-    url: 'https://app-review-analyzer.com',
-    siteName: 'App Review Sentiment Analyzer',
-    locale: 'en_US',
-    type: 'website',
-  },
+  title: 'App Review Sentiment Analysis',
+  description: 'Analyze Google Play Store app reviews for sentiment and feedback insights',
 };
 
 export default function RootLayout({
@@ -24,8 +16,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        {children}
+      <body className={inter.className}>
+        <main className="min-h-screen">
+          {children}
+        </main>
       </body>
     </html>
   );
