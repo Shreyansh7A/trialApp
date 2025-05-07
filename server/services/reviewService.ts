@@ -1,4 +1,4 @@
-import * as gplay from 'google-play-scraper';
+import gplay from 'google-play-scraper';
 import { analyzeSentiment as openAiAnalyzeSentiment } from '@/lib/openai';
 import { format } from 'date-fns';
 import pLimit from 'p-limit';
