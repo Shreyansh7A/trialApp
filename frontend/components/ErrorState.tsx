@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface ErrorStateProps {
   errorMessage: string;
   onDismiss: () => void;

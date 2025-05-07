@@ -1,3 +1,5 @@
+import React from 'react';
+
 export default function LoadingState() {
   return (
     <div className="card flex flex-col items-center justify-center p-8">

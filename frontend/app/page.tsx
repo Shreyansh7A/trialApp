@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import SearchForm from '../components/SearchForm';
 import ResultsCard from '../components/ResultsCard';
 import SearchHistory from '../components/SearchHistory';
