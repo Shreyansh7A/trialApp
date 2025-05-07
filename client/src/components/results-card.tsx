@@ -29,6 +29,25 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
     }
   };
   
+  // Helper function to check if a date string is valid
+  const isValidDate = (dateString: string): boolean => {
+    const date = new Date(dateString);
+    return !isNaN(date.getTime());
+  };
+
+  // Format date with error handling
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString || !isValidDate(dateString)) {
+      return 'Unknown date';
+    }
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Unknown date';
+    }
+  };
+
   const renderStars = (score: number) => {
     return Array(5).fill(0).map((_, i) => (
       <svg 
@@ -226,11 +245,13 @@ export function ResultsCard({ result, onNewAnalysis }: ResultsCardProps) {
                       {review.userName || "Anonymous User"}
                     </h4>
                     <div className="flex items-center">
-                      <Badge {...getSentimentBadgeProps(review.sentiment)}>
-                        {review.sentiment?.charAt(0).toUpperCase() + review.sentiment?.slice(1) || "Neutral"}
+                      <Badge {...getSentimentBadgeProps(review.sentiment ?? null)}>
+                        {review.sentiment 
+                          ? review.sentiment.charAt(0).toUpperCase() + review.sentiment.slice(1) 
+                          : "Neutral"}
                       </Badge>
                       <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                        {formatDistanceToNow(new Date(review.at), { addSuffix: true })}
+                        {formatDate(review.at)}
                       </span>
                     </div>
                   </div>
