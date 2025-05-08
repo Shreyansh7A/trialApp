@@ -38,8 +38,9 @@ async function forwardToFastAPI(req: Request, res: Response, endpoint: string) {
     
     // Forward the response back to the client
     res.status(response.status).json(response.data);
-  } catch (error) {
-    log(`Error from FastAPI backend: ${error.message}`);
+  } catch (err) {
+    // Handle any type of error
+    log(`Error from FastAPI backend: ${err instanceof Error ? err.message : String(err)}`);
     
     // Fall back to the legacy implementation
     log('Falling back to legacy implementation...');

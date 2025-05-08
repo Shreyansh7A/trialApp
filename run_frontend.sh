@@ -1,14 +1,20 @@
 #!/bin/bash
 
+# Make the script exit if any command fails
+set -e
+
+# Print startup message
+echo "==============================================="
+echo "  Starting Next.js Frontend"
+echo "==============================================="
+
 # Change to the frontend directory
 cd frontend
 
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-  echo "Installing frontend dependencies..."
-  npm install
-fi
+# Start Next.js frontend in development mode
+echo "🚀 Starting Next.js frontend..."
+npm run dev -- -p 3000
 
-# Start the Next.js frontend
-echo "Starting Next.js frontend on port 3000..."
-npm run dev
+echo "==============================================="
+echo "  Next.js frontend exited"
+echo "==============================================="
