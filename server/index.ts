@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import dotenv from "dotenv";
+import axios from "axios";
+import { spawn } from "child_process";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -10,6 +12,33 @@ dotenv.config();
 console.log("Environment variables:");
 console.log("NODE_ENV:", process.env.NODE_ENV);
 console.log("OPENAI_API_KEY exists:", Boolean(process.env.OPENAI_API_KEY));
+
+// Define the FastAPI backend URL
+const FASTAPI_URL = "http://localhost:8000";
+
+// Start FastAPI backend in a separate process
+function startFastAPIBackend() {
+  try {
+    log("Starting FastAPI backend...");
+    const fastapi = spawn("python", ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"], {
+      cwd: "./backend",
+      stdio: "inherit",
+    });
+    
+    fastapi.on("close", (code) => {
+      log(`FastAPI backend process exited with code ${code}`);
+    });
+    
+    // Return the process so we can handle it later if needed
+    return fastapi;
+  } catch (error) {
+    log(`Error starting FastAPI backend: ${error}`);
+    return null;
+  }
+}
+
+// Start FastAPI backend
+const fastapiProcess = startFastAPIBackend();
 
 const app = express();
 app.use(express.json());
