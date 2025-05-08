@@ -164,12 +164,16 @@ async def analyze_app_reviews(app_name: str):
             app_info = gplay.app(search_results[0]['appId'])
         
         # Get reviews (most recent 100)
-        reviews_result = gplay.reviews(
-            app_id=app_info['appId'],
-            count=100,
-            sort=gplay.Sort.NEWEST,
-            continuation_token=None  # Explicitly set to None for the first page
-        )
+        try:
+            # First, try with the standard parameter format
+            reviews_result = gplay.reviews(
+                app_id=app_info['appId'],
+                count=100,
+                sort=gplay.Sort.NEWEST
+            )
+        except TypeError:
+            # Fall back to the positional argument format if needed
+            reviews_result = gplay.reviews(app_info['appId'], lang='en', country='us', sort=gplay.Sort.NEWEST, count=100)
         
         reviews = reviews_result[0]
         
@@ -179,6 +183,21 @@ async def analyze_app_reviews(app_name: str):
             sentiment_result = await analyze_sentiment(review['content'])
             
             # Handle missing fields in the review data
+            # Convert datetime object to string if needed
+            at_value = review.get('at', '')
+            if at_value and not isinstance(at_value, str):
+                try:
+                    at_value = at_value.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    at_value = str(at_value)
+                    
+            reply_at = review.get('replyAt')
+            if reply_at and not isinstance(reply_at, str):
+                try:
+                    reply_at = reply_at.strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    reply_at = str(reply_at)
+                    
             analyzed_review = Review(
                 id=str(review.get('reviewId', '')),
                 userName=review.get('userName'),
@@ -187,9 +206,9 @@ async def analyze_app_reviews(app_name: str):
                 score=review.get('score', 0),
                 thumbsUpCount=review.get('thumbsUpCount', 0),
                 reviewCreatedVersion=review.get('reviewCreatedVersion'),
-                at=review.get('at', ''),
+                at=at_value,
                 replyContent=review.get('replyContent'),
-                replyAt=review.get('replyAt'),
+                replyAt=reply_at,
                 sentiment=sentiment_result["sentiment"],
                 sentimentScore=sentiment_result["score"]
             )
