@@ -1,15 +1,8 @@
 import OpenAI from "openai";
-import dotenv from 'dotenv';
-
-// Load environment variables from .env file
-dotenv.config();
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-export const openai = new OpenAI({
-  // NOTE: OpenAI keys must be loaded server-side, not client-side
-  // The client code delegates to the server for sentiment analysis
-  // We're using a placeholder here since the actual key is used in the server
-  apiKey: "placeholder-key-actual-key-used-server-side"
+export const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY || "sk-placeholder-key" 
 });
 
 export interface SentimentAnalysisResult {
@@ -20,66 +13,29 @@ export interface SentimentAnalysisResult {
 
 export async function analyzeSentiment(text: string): Promise<SentimentAnalysisResult> {
   try {
-    // For local development, we'll check if running in Node.js environment
-    // In browser environment, the OpenAI API key should never be exposed
-    if (typeof window === 'undefined') {
-      // Server-side: Direct OpenAI API call
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a sentiment analysis expert. Analyze the sentiment of the app review and provide a sentiment classification (positive, negative, or neutral), a sentiment score from 0 to 100 (where 0 is completely negative and 100 is completely positive), and a confidence score between 0 and 1. Respond with JSON in this format: { 'sentiment': string, 'score': number, 'confidence': number }",
-          },
-          {
-            role: "user",
-            content: text,
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a sentiment analysis expert. Analyze the sentiment of the app review and provide a sentiment classification (positive, negative, or neutral), a sentiment score from 0 to 100 (where 0 is completely negative and 100 is completely positive), and a confidence score between 0 and 1. Respond with JSON in this format: { 'sentiment': string, 'score': number, 'confidence': number }",
+        },
+        {
+          role: "user",
+          content: text,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
 
-      // Ensure content is not null
-      const content = response.choices[0]?.message?.content || '{"sentiment":"neutral","score":50,"confidence":0.5}';
-      const result = JSON.parse(content);
+    const result = JSON.parse(response.choices[0].message.content);
 
-      return {
-        sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
-        score: Math.max(0, Math.min(100, Math.round(result.score))),
-        confidence: Math.max(0, Math.min(1, result.confidence)),
-      };
-    } else {
-      // Client-side: Call the server API endpoint for sentiment analysis
-      try {
-        const response = await fetch('/api/sentiment', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text }),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with status ${response.status}`);
-        }
-        
-        const result = await response.json();
-        return {
-          sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
-          score: result.score,
-          confidence: result.confidence,
-        };
-      } catch (apiError) {
-        console.error("Error calling sentiment API:", apiError);
-        // Fallback to neutral sentiment if API call fails
-        return {
-          sentiment: 'neutral',
-          score: 50,
-          confidence: 0.5
-        };
-      }
-    }
+    return {
+      sentiment: result.sentiment as 'positive' | 'negative' | 'neutral',
+      score: Math.max(0, Math.min(100, Math.round(result.score))),
+      confidence: Math.max(0, Math.min(1, result.confidence)),
+    };
   } catch (error) {
     console.error("Failed to analyze sentiment:", error);
     throw new Error("Failed to analyze sentiment: " + (error as Error).message);

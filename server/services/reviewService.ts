@@ -64,26 +64,6 @@ export async function getAppReviews(appNameOrId: string): Promise<AppReviewsResu
 // Analyze sentiment of reviews
 export async function analyzeSentiment(reviews: gplay.IReviewsItem[]): Promise<Review[]> {
   try {
-    // Check if we have a valid OpenAI API key
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn('OPENAI_API_KEY environment variable is not set. Please set it in your .env file.');
-      // Return reviews with neutral sentiment
-      return reviews.map(review => ({
-        id: review.id,
-        userName: review.userName || null,
-        userImage: review.userImage || null,
-        content: review.text || '',
-        score: review.score,
-        thumbsUpCount: review.thumbsUp,
-        reviewCreatedVersion: review.reviewCreatedVersion || null,
-        at: review.at,
-        replyContent: review.replyText || null,
-        replyAt: review.repliedAt || null,
-        sentiment: 'neutral',
-        sentimentScore: 50,
-      } as Review));
-    }
-    
     // Process reviews with rate limiting
     const analyzedReviews = await Promise.all(
       reviews.map(review => limit(async () => {
@@ -117,7 +97,7 @@ export async function analyzeSentiment(reviews: gplay.IReviewsItem[]): Promise<R
             id: review.id,
             userName: review.userName || null,
             userImage: review.userImage || null,
-            content: review.text || '',
+            content: review.text,
             score: review.score,
             thumbsUpCount: review.thumbsUp,
             reviewCreatedVersion: review.reviewCreatedVersion || null,
