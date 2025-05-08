@@ -95,8 +95,9 @@ async def analyze_sentiment(text: str):
         return {"sentiment": "neutral", "score": 50, "confidence": 0.5}
     
     try:
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",  # Using the latest model
+        # The newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system",
@@ -111,7 +112,11 @@ async def analyze_sentiment(text: str):
         )
         
         content = response.choices[0].message.content
-        result = json.loads(content)
+        if content is None:
+            # Handle case where content is None
+            result = {"sentiment": "neutral", "score": 50, "confidence": 0.5}
+        else:
+            result = json.loads(content)
         
         # Normalize the result
         result["score"] = max(0, min(100, round(result["score"])))
@@ -160,9 +165,10 @@ async def analyze_app_reviews(app_name: str):
         
         # Get reviews (most recent 100)
         reviews_result = gplay.reviews(
-            app_info['appId'],
+            app_id=app_info['appId'],
             count=100,
-            sort=gplay.Sort.NEWEST
+            sort=gplay.Sort.NEWEST,
+            continuation_token=None  # Explicitly set to None for the first page
         )
         
         reviews = reviews_result[0]
@@ -172,17 +178,18 @@ async def analyze_app_reviews(app_name: str):
         for review in reviews:
             sentiment_result = await analyze_sentiment(review['content'])
             
+            # Handle missing fields in the review data
             analyzed_review = Review(
-                id=str(review['reviewId']),
-                userName=review['userName'],
-                userImage=review['userImage'],
-                content=review['content'],
-                score=review['score'],
-                thumbsUpCount=review['thumbsUpCount'],
-                reviewCreatedVersion=review['reviewCreatedVersion'],
-                at=review['at'],
-                replyContent=review['replyContent'],
-                replyAt=review['replyAt'],
+                id=str(review.get('reviewId', '')),
+                userName=review.get('userName'),
+                userImage=review.get('userImage'),
+                content=review.get('content', ''),
+                score=review.get('score', 0),
+                thumbsUpCount=review.get('thumbsUpCount', 0),
+                reviewCreatedVersion=review.get('reviewCreatedVersion'),
+                at=review.get('at', ''),
+                replyContent=review.get('replyContent'),
+                replyAt=review.get('replyAt'),
                 sentiment=sentiment_result["sentiment"],
                 sentimentScore=sentiment_result["score"]
             )
