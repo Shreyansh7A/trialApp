@@ -1,28 +1,50 @@
 #!/bin/bash
 
-# Log startup information
-echo "Starting Google Play Store Review Sentiment Analyzer..."
+# Make the script exit if any command fails
+set -e
 
-# Start the FastAPI backend in the background
+# Print startup message
+echo "==============================================="
+echo "  Starting App Review Sentiment Analysis"
+echo "==============================================="
+
+# Check for OPENAI_API_KEY
+if [ -z "$OPENAI_API_KEY" ]; then
+  echo "⚠️  WARNING: OPENAI_API_KEY environment variable not found."
+  echo "   Sentiment analysis will use fallback values."
+  echo "   Please set your OpenAI API key in the Replit Secrets tab."
+  echo "==============================================="
+else
+  echo "✓ OpenAI API key found."
+fi
+
+# Start FastAPI backend in the background
+echo "🐍 Starting FastAPI backend..."
 cd backend
-echo "Starting FastAPI backend on port 8000..."
-python3 run.py &
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
-# Wait for the FastAPI backend to start
+# Wait for the backend to start
 sleep 2
-echo "FastAPI backend started with PID: $BACKEND_PID"
+echo "✓ FastAPI backend running on port 8000"
 
-# Return to root directory
-cd ..
+# Start Next.js frontend in the background
+echo "🚀 Starting Next.js frontend..."
+cd ../frontend
+npx next dev -p 3000 &
+FRONTEND_PID=$!
 
-# Start the Express.js server (which serves the frontend)
-echo "Starting Express.js server on port 5000..."
-NODE_ENV=development npx tsx server/index.ts
+# Wait for frontend to start
+sleep 2
+echo "✓ Next.js frontend running on port 3000"
 
-# This will only run if the Express server exits
-# Kill the background FastAPI process
-echo "Express.js server stopped. Cleaning up..."
-kill $BACKEND_PID
+echo "==============================================="
+echo "  Services are running! Access the app at:"
+echo "  https://$REPL_SLUG.$REPL_OWNER.replit.dev"
+echo "==============================================="
 
-echo "All services stopped."
+# Trap to kill both processes on exit
+trap "echo 'Shutting down services...'; kill $BACKEND_PID $FRONTEND_PID" EXIT INT TERM
+
+# Wait for both processes
+wait
